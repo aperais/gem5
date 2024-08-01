@@ -158,6 +158,8 @@ class DynInst : public ExecContext, public RefCounted
         SquashedInIQ,            /// Instruction is squashed in the IQ
         SquashedInLSQ,           /// Instruction is squashed in the LSQ
         SquashedInROB,           /// Instruction is squashed in the ROB
+        CannotExecute,           /// Processor does not have capability to
+                                 /// execute the instruction
         PinnedRegsRenamed,       /// Pinned registers are renamed
         PinnedRegsWritten,       /// Pinned registers are written back
         PinnedRegsSquashDone,    /// Regs pinning status updated after squash
@@ -840,6 +842,16 @@ class DynInst : public ExecContext, public RefCounted
 
     /** Returns whether or not this instruction is squashed in the ROB. */
     bool isSquashedInROB() const { return status[SquashedInROB]; }
+
+    /** Mark this instruction as having attempted to execute
+     * but CPU did not have a capable functional unit.
+     */
+    void setCannotExecute() { status.set(CannotExecute); }
+
+    /** Returns whether or not this instruction attempted
+     * to execute and found not capable FU.
+     */
+    bool cannotExecute() { return status[CannotExecute]; }
 
     /** Returns whether pinned registers are renamed */
     bool isPinnedRegsRenamed() const { return status[PinnedRegsRenamed]; }

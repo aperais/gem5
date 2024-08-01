@@ -812,7 +812,7 @@ InstructionQueue::scheduleReadyInsts()
             continue;
         }
 
-        int idx = FUPool::NoCapableFU;
+        int idx = FUPool::NoNeedFU;
         Cycles op_latency = Cycles(1);
         ThreadID tid = issuing_inst->threadNumber;
 
@@ -832,7 +832,7 @@ InstructionQueue::scheduleReadyInsts()
 
         // If we have an instruction that doesn't require a FU, or a
         // valid FU, then schedule for execution.
-        if (idx != FUPool::NoFreeFU) {
+        if (idx > FUPool::NoFreeFU || idx == FUPool::NoNeedFU) {
             if (op_latency == Cycles(1)) {
                 i2e_info->size++;
                 instsToExecute.push_back(issuing_inst);
@@ -897,9 +897,21 @@ InstructionQueue::scheduleReadyInsts()
 
             listOrder.erase(order_it++);
             iqStats.statIssuedInstType[tid][op_class]++;
-        } else {
+        } else if (idx != FUPool::NoCapableFU) {
             iqStats.statFuBusy[op_class]++;
             iqStats.fuBusy[tid]++;
+            ++order_it;
+        } else {
+            // CPU has no capable FU for the instruction
+            // but this may be OK if the instruction gets
+            // squashed. Remember this and act if the
+            // instruction is identified as being part of
+            // the correct path (reaches head of ROB)
+            // Treat it as having to wait (NoFreeFU) in the
+            // meantime, but mark it as ready to commit
+            // so commit processes it
+            issuing_inst->setCannotExecute();
+            issuing_inst->setCanCommit();
             ++order_it;
         }
     }
