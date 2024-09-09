@@ -832,7 +832,8 @@ InstructionQueue::scheduleReadyInsts()
 
         // If we have an instruction that doesn't require a FU, or a
         // valid FU, then schedule for execution.
-        if (idx > FUPool::NoFreeFU || idx == FUPool::NoNeedFU) {
+        if (idx > FUPool::NoFreeFU || idx == FUPool::NoNeedFU ||
+            idx == FUPool::NoCapableFU) {
             if (op_latency == Cycles(1)) {
                 i2e_info->size++;
                 instsToExecute.push_back(issuing_inst);
@@ -841,7 +842,17 @@ InstructionQueue::scheduleReadyInsts()
                 // cycle if we used one.
                 if (idx >= 0)
                     fuPool->freeUnitNextCycle(idx);
+
+                // CPU has no capable FU for the instruction
+                // but this may be OK if the instruction gets
+                // squashed. Remember this and give IEW
+                // the opportunity to trigger a fault
+                // if the instruction is unsupported.
+                // Otherwise, commit will panic.
+                if (idx == FUPool::NoCapableFU)
+                  issuing_inst->setNoCapableFU();
             } else {
+                assert(idx != FUPool::NoCapableFU);
                 bool pipelined = fuPool->isPipelined(op_class);
                 // Generate completion event for the FU
                 ++wbOutstanding;
@@ -897,21 +908,9 @@ InstructionQueue::scheduleReadyInsts()
 
             listOrder.erase(order_it++);
             iqStats.statIssuedInstType[tid][op_class]++;
-        } else if (idx != FUPool::NoCapableFU) {
+        } else if (idx == FUPool::NoFreeFU) {
             iqStats.statFuBusy[op_class]++;
             iqStats.fuBusy[tid]++;
-            ++order_it;
-        } else {
-            // CPU has no capable FU for the instruction
-            // but this may be OK if the instruction gets
-            // squashed. Remember this and act if the
-            // instruction is identified as being part of
-            // the correct path (reaches head of ROB)
-            // Treat it as having to wait (NoFreeFU) in the
-            // meantime, but mark it as ready to commit
-            // so commit processes it
-            issuing_inst->setCannotExecute();
-            issuing_inst->setCanCommit();
             ++order_it;
         }
     }
